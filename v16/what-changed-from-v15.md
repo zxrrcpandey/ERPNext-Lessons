@@ -511,10 +511,12 @@ port, check the app for:
    touching the queue or cache directly needs review.
 4. **Front-end build.** Any app with a `package.json` build now runs on Node 24; a v15-era
    toolchain may not.
-5. **Third-party apps you don't control.** `india_compliance` had **no confirmed
-   version-16 branch** at the time of the research pass `[UNVERIFIED — not checked
-   upstream]`. For an Indian client, GST compliance is a hard gate: confirm it exists
-   before you agree a date. Same question for LMS, HRMS, or anything else in the bench.
+5. **Third-party apps you don't control.** `india_compliance` **does** have a
+   `version-16` branch — **resolved 2026-08-17**: v16.8.4 installed on Kantishiva,
+   pinning `frappe >=16.0.0,<17.0.0` `[VERIFIED — installed]`. For an Indian client, GST
+   compliance is a hard gate, so confirm the branch exists *and* what it pins before you
+   agree a date. Same question for LMS, HRMS, or anything else in the bench. Method and
+   install gotchas: [../apps/installing-third-party-apps.md](../apps/installing-third-party-apps.md).
 6. **Fixtures, Custom Fields and DocPerm patterns** are not version-portable assumptions —
    revalidate against v16 rather than assuming the v15 `after_migrate` hooks still fire the
    same way.
@@ -564,6 +566,8 @@ the port work.**
 | `unknown log format "main"` | v16 default path | bench emits `access_log ... main`; Debian/Ubuntu nginx defines no such format → §9 |
 | exit code `137` on `bench build` | v16 in practice | genuine OOM kill during the erpnext Vite build → §8 |
 | exit code `143` on `bench build` | both | SIGTERM, **not** OOM — usually an app missing from `sites/apps.txt` → v15 file, Lesson 3 |
+| `subprocess.CalledProcessError: Command 'sudo supervisorctl status' returned non-zero exit status 1.` | both, at the **end** of `bench get-app` | cosmetic — clone and pip install already succeeded; `frappe` can't sudo non-interactively → [../apps/installing-third-party-apps.md](../apps/installing-third-party-apps.md) §2 |
+| `sudo: interactive authentication is required` | `sudo -u frappe sudo …` | sudo-group membership without a NOPASSWD rule; `bench setup sudoers` covers nginx/certbot only, **not** supervisorctl → same file §2 |
 
 ---
 
@@ -572,8 +576,12 @@ the port work.**
 - In-place v15 → v16 upgrade: never attempted here. `[UNVERIFIED]`
 - v15 dump → v16 site restore, and what `bench migrate` does to it. `[UNVERIFIED]`
 - v16 on any OS other than Ubuntu 26.04 (i.e. via `uv python install 3.14`). `[UNVERIFIED]`
-- `india_compliance` version-16 availability. `[UNVERIFIED]` — check upstream before
-  committing to any Indian client's v16 date.
+- ~~`india_compliance` version-16 availability.~~ **Closed 2026-08-17** — `version-16`
+  exists, head `d6666c2` = tag `v16.8.4`, installed and verified on Kantishiva. See
+  [../apps/installing-third-party-apps.md](../apps/installing-third-party-apps.md).
+- Whether `bench update` behaves with a third-party app on the bench (v16). `[UNVERIFIED]`
+- Whether `uninstall-app` reverses a compliance app's `after_install` side effects
+  (custom fields, accounts, tax templates). `[UNVERIFIED]`
 - Whether `[tool.uv] exclude-newer = "7 days"` actually applies during `bench init`. `[UNVERIFIED]`
 - Whether `bench setup-chrome`'s pinned Chromium 133.0.6943.35 will keep downloading from
   Google's CDN. Kantishiva got it on 2026-08-17; that URL is not forever.

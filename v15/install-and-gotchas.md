@@ -208,7 +208,7 @@ re-tested on 10.6]. The explicit `collation-server` line matters on 11.x (defaul
 bench init frappe-bench --frappe-branch version-15 --python /usr/bin/python3 --verbose
 cd frappe-bench
 bench get-app erpnext --branch version-15
-bench get-app https://github.com/resilient-tech/india-compliance --branch version-15   # [unverified URL — confirm upstream]
+bench get-app https://github.com/resilient-tech/india-compliance.git --branch version-15   # [URL verified 2026-08-17]
 
 bench new-site --help | head -40        # ← CONFIRM flag names, then run new-site
 bench --site <site> install-app erpnext
@@ -496,6 +496,13 @@ real cause is the half-registration. Do not go chasing memory. `[source: DEPLOYM
   this once produced the literal corrupted entry **`erpnextlms`** (two app names fused).
   Rewrite the whole file, or let bench manage it.
 
+> **The mirror-image failure also exists**, and the exit code does not distinguish them:
+> `get-app` can also fail *at its very last step* — `bench.reload()` → `sudo supervisorctl
+> status` — with the clone, the pip install and `apps.txt` all **correct**. Killing the app
+> folder and retrying there is wasted work. Always confirm which one you have by checking
+> `apps.txt`, the import and the git tag, not the exit code. See
+> [../apps/installing-third-party-apps.md](../apps/installing-third-party-apps.md) §2.
+
 ---
 
 ## 6. Lesson 4 — Node version pins (LMS)
@@ -732,8 +739,11 @@ Read this before back-porting anything from the Kantishiva v16 notes.
 
 - No end-to-end v15 apt package list is on record anywhere in our docs. §2.1 lists the
   components, not a verified `apt-get install` line.
-- The `india_compliance` get-app URL in §2.3 is `[unverified]` — confirm the upstream remote
-  before using it. The pinned version (15.25.4, branch `version-15`) *is* verified.
+- ~~The `india_compliance` get-app URL in §2.3 is `[unverified]`.~~ **Closed 2026-08-17** —
+  `https://github.com/resilient-tech/india-compliance.git` confirmed by `git ls-remote`;
+  both `version-15` and `version-16` branches exist. The pinned version (15.25.4, branch
+  `version-15`) was already verified. Third-party install method:
+  [../apps/installing-third-party-apps.md](../apps/installing-third-party-apps.md).
 - The MariaDB 10.6 config warning (§2.2) is reasoned from the 10.3 removal, verified on 11.8,
   **not** re-tested on 10.6.
 - `bench clear-cache` → "logs everyone out": the redis-key deletion is verified in source;
