@@ -108,20 +108,57 @@ bench --site <site> console
 
 ## Lesson 2 — v16 added `Item.validate_variant()`
 
-Applies to: **v16 only**
+Applies to: **v16 only** — the method does not exist in erpnext 15.97.0.
 
-v16 runs a new `Item.validate_variant()` on **every save of an Item that has `variant_of`
-set**, enforcing conditions with no v15 equivalent. An app that creates variants by
-reusing or matching Item Attribute rows can trip it — in particular a membership test like
-`row.attribute == attr_name` is no longer sufficient.
+v16 wires a new `validate_variant()` into `Item.validate()`. On **every save of an Item
+with `variant_of` set** it hard-requires three things:
 
-v16 also changed variant lookup in `erpnext/controllers/item_variant.py` to **translate the
-attribute name before matching** (`row.attribute == _(attribute)`), so on a site running a
-non-English language, attribute matching can behave differently from v15.
+| Requirement | Failure message |
+|---|---|
+| The template has `has_variants` | `Item {0} is not a template item.` |
+| An `Item Variant Attribute` row exists on the **template** | `Attribute {0} is not valid for the selected template.` |
+| That row is **not disabled** | `Attribute {0} is disabled.` |
 
-**Status in our case: UNVERIFIED.** The variant path was not exercised on v16 — the
-standalone-item path was. If your app creates variants, test that path explicitly on the
-throwaway site before going live.
+(`erpnext/stock/doctype/item/item.py` — the disabled check reads the `disabled` column on
+`Item Variant Attribute`, a field that does exist in v16.)
+
+**Status: variants VERIFIED WORKING on v16** (frappe 16.31.0 / erpnext 16.32.1). Both the
+single-variant and multi-variant paths create the template with `has_variants=1` and the
+attribute row, then the children:
+
+```
+single : template VAR-GRN-001  ->  VAR-GRN-001-RBG
+multi  : template VAR-GRN-002  ->  VAR-GRN-002-RBG, VAR-GRN-002-SBL
+```
+
+**The trap is the template-REUSE branch.** An app that checks only
+`row.attribute == attr_name` cannot tell an enabled row from a disabled one. On v16 a
+disabled row still matches by name, so the "add the attribute" repair is skipped and the
+variant insert then fails — with no way for the app to recover, since the repair it
+skipped was the only remediation. It fails *after* the item code has been minted.
+
+```python
+def _ensure_template_attribute(template, attr_name):
+    """True when the template already has an ENABLED row (no save needed)."""
+    for row in template.attributes:
+        if row.attribute != attr_name:
+            continue
+        if row.disabled:
+            row.disabled = 0      # heal it — this app owns the attribute
+            return False
+        return True
+    template.append("attributes", {"attribute": attr_name})
+    return False
+```
+
+Verified by forcing `disabled=1` at the DB level: the helper returns "needs save", the row
+comes back `disabled=0`, and the subsequent variant insert succeeds.
+
+> **Testing note.** Reaching the reuse branch through the normal flow is very hard: the
+> serial minting loop skips any code that already exists, so it allocates a *new* template
+> code rather than reusing the pre-seeded one. Two attempts to reproduce it end-to-end
+> failed for exactly that reason. Test the helper directly instead of assuming a
+> passing end-to-end run has covered this path.
 
 ---
 
