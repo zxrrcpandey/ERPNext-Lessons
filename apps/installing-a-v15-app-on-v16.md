@@ -143,6 +143,77 @@ Verified by diffing 15.100.0/15.97.0 against 16.31.0/16.32.1:
 - **The desk page mechanism** is unchanged: `frappe.pages[...].on_page_load` plus
   `frappe.render_template`, served from the Page doc (69,863 bytes of script on v16).
 
+---
+
+## Lesson 4 — v16 back-fills `Item.taxes` from the Item Group
+
+Applies to: **v16 only** — verified in erpnext 16.32.1, absent from 15.97.0.
+
+`Item.update_defaults_from_item_group()` (called from `Item.validate()`) gained a block at
+**item.py:813**:
+
+```python
+if not self.taxes and item_group.taxes:
+    for tax in item_group.taxes:
+        self.append("taxes", {
+            "item_tax_template": tax.item_tax_template,
+            "tax_category": tax.tax_category,
+            "valid_from": tax.valid_from,
+            "minimum_net_rate": tax.minimum_net_rate,
+            "maximum_net_rate": tax.maximum_net_rate,
+        })
+```
+
+v15's `item.py` contains **no `self.taxes` reference at all**, so this is genuinely new.
+
+**What it means for an app that creates Items:** if your app leaves `taxes` empty (e.g. only
+sets it when the user picks a tax template), items created on v16 will silently inherit the
+Item Group's tax rows — and those rows then drive tax calculation on every downstream
+Purchase Order and Sales Invoice. On v15 they came out with no tax rows.
+
+This is arguably ERPNext behaving *better*, not a bug — but it is a behaviour change, so
+re-baseline any UAT or test that asserts an empty `taxes` table.
+
+**Check the practical impact before worrying:**
+
+```bash
+bench --site <site> mariadb
+> SELECT parent, item_tax_template FROM `tabItem Tax` WHERE parenttype = 'Item Group';
+```
+
+Zero rows means nothing to inherit today — but expect a GST site to add them later, at
+which point the behaviour starts applying to newly created items.
+
+## Lesson 5 — `limit_page_length` is deprecated in v16
+
+Applies to: **v16** (fix is safe on v15 too)
+
+v16 re-points `frappe.get_all` / `get_list` from `frappe.model.db_query` to
+**`frappe.model.qb_query`** (`frappe/__init__.py:1378`). The new engine documents
+`limit_page_length` as *"Legacy pagination length (deprecated, use limit)"* and warns on
+every call, with removal slated for **v17**.
+
+```python
+frappe.get_all("X", filters=..., limit_page_length=n)   # warns on v16
+frappe.get_all("X", filters=..., limit=n)               # correct on v15 AND v16
+```
+
+v15's `db_query.execute()` already accepts `limit` (`db_query.py:119`), so switching is a
+one-word change that works on both. The same engine swap also drops the `docstatus` and
+`add_total_row` kwargs — grep your app for all three.
+
+## Lesson 6 — v16 sanitises `frappe.throw` / `msgprint` HTML
+
+Applies to: **v16 only**
+
+v16 pipes messages through an nh3-based `clean_html` unless `allow_dangerous_html=True`;
+v15 did no sanitising. The allowlist is roughly
+`div p br ul ol li strong b em i u table thead tbody td tr a`, so ordinary formatted error
+messages survive — but `<span>`, `<code>`, `<h4>`, and `style`/`class` attributes are
+**silently stripped**. Links also gain `rel="noopener noreferrer"`.
+
+Not a break for plain messages; just don't assume arbitrary markup renders.
+
 ## Post-install checklist for a v15 app on v16
 
 ```bash
