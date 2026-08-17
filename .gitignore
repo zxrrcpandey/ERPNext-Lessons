@@ -1,0 +1,13 @@
+# Never commit credentials or customer data — see operations/security.md
+*site_config*.json
+*.sql
+*.sql.gz
+*.tar
+backups/
+creds*
+*.pem
+*.key
+
+.DS_Store
+__pycache__/
+*.pyc
