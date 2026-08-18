@@ -21,9 +21,9 @@ Nothing you do to one of these affects the others. Diagnose against this table f
 | Surface | What feeds it | Where it breaks |
 |---|---|---|
 | **App switcher / launcher** (top-left grid, the `/apps` page) | the `add_to_apps_screen` hook, read by `frappe.apps.get_apps()` | hook missing (§1), wrong route prefix (§2) |
-| **Desk tile grid** (`/desk` home) | **Desktop Icon** records, auto-generated per app install | records missing (§3), stale per-user layout (§5) |
+| **Desk tile grid** (`/desk` home) | **Desktop Icon** records, auto-generated per app install | records missing or migrate-swept (§3), stale per-user layout (§6) |
 | **Tile artwork** | per-app SVG files scanned at boot | no files → grey letter tile (§4) |
-| **Workspace sidebar** (left panel) | Workspace (+ Workspace Sidebar) records | v15-authored JSON lacks `type`/`app` → see [../apps/porting-a-large-app-to-v16.md](../apps/porting-a-large-app-to-v16.md) §7 |
+| **Workspace sidebar** (left panel) | Workspace (+ Workspace Sidebar) records | v15-authored JSON lacks `type`/`app` → see [../apps/porting-a-large-app-to-v16.md](../apps/porting-a-large-app-to-v16.md) §7; flat icon-less items (§5) |
 
 Both the launcher (§1–2) and the tile grid (§3–5) exist so the fix for "no icon"
 depends on **which** icon the user means. Ask, or fix all of them.
@@ -237,7 +237,78 @@ desk tile — two icon systems, zero overlap.
 
 ---
 
-## 5. Existing users may see nothing until they "Reset layout"
+## 5. The sidebar is its own doctype — grouping and per-item icons
+
+Applies to: **v16 only**
+
+**Symptom:** inside the workspace, every left-sidebar row shows the same generic
+list glyph, in one flat run with no grouping — even though the workspace body is
+neatly sectioned `[KANTISHIVA]`.
+
+**Cause:** the auto-generated **Workspace Sidebar**
+(`create_workspace_sidebar_for_workspaces`) is just `Home` plus one bare Link per
+workspace *shortcut* — no icons, no structure. Icons and grouping live on the
+**Workspace Sidebar Item** rows, which the generator never fills in.
+
+The item model `[V16-LOCAL workspace_sidebar_item.json]`:
+
+| Field | Values / meaning |
+|---|---|
+| `type` | `Link` / `Section Break` / `Spacer` / `Sidebar Item Group` |
+| `link_type` | `DocType` / `Page` / `Report` / `Workspace` / `Dashboard` / `URL` |
+| `icon` | sprite name (`wheat`, `handshake`, `truck`, `warehouse`, `home`, …) |
+| `indent` + `keep_closed` | on a **Section Break**: renders it as a collapsible group header (`keep_closed: 1` starts collapsed) |
+| `child` | on a Link: nests it under the preceding Section Break |
+
+**The pattern to copy is ERPNext's own** (`erpnext/workspace_sidebar/stock.json`):
+top-level Links carry icons; a group is a Section Break with an icon and
+`indent: 1`, followed by `child: 1` Links — which render as indented labels
+*without* icons (that is ERPNext's convention, not a bug). Condensed solution
+from the Mandi sidebar:
+
+```json
+{
+ "doctype": "Workspace Sidebar", "name": "Mandi", "title": "Mandi",
+ "app": "trustbit_mandi", "module": "Trustbit Mandi",
+ "header_icon": "agriculture", "standard": 1,
+ "modified": "2026-08-18 22:30:00.000000",
+ "items": [
+  {"type": "Link", "label": "Home", "link_type": "Workspace", "link_to": "Mandi",
+   "icon": "home", "collapsible": 1},
+  {"type": "Section Break", "label": "Mandi", "icon": "wheat",
+   "indent": 1, "keep_closed": 0, "link_type": "DocType", "collapsible": 1},
+  {"type": "Link", "label": "Grain Purchase", "link_type": "DocType",
+   "link_to": "Grain Purchase", "child": 1, "collapsible": 1},
+  {"type": "Section Break", "label": "Vehicle", "icon": "truck",
+   "indent": 1, "link_type": "DocType", "collapsible": 1},
+  {"type": "Link", "label": "Vehicle Dispatch", "link_type": "DocType",
+   "link_to": "Vehicle Dispatch", "child": 1, "collapsible": 1}
+ ]
+}
+```
+
+Ship it at `<app>/workspace_sidebar/<scrub(title)>.json` — `bench migrate` syncs
+that app-level folder (`frappe/model/sync.py`, `app_level_folders`), which also
+protects it from the orphan sweep (§3). Three gotchas:
+
+- The file's `modified` must be **newer than the DB record's**, or the import is
+  silently skipped as already-current.
+- Validate every icon name against the sprite first
+  (`grep -ro 'id="icon-<name>"' frappe/public/icons/`) — an unknown name renders
+  as nothing.
+- If one specific user still sees the old sidebar: user customization creates a
+  per-user copy named `<title>-<user>` that **shadows** the standard record for
+  them (`add_sidebar_items`). Check
+  `frappe.get_all("Workspace Sidebar", filters={"title": ["like", "%@%"]})` and
+  delete the stale copy.
+
+Deployed for both apps on 2026-08-18 (Mandi: 4 iconed groups over 28 items;
+Item Management: flat, one icon per item) and verified after a repeat migrate
+`[KANTISHIVA]`.
+
+---
+
+## 6. Existing users may see nothing until they "Reset layout"
 
 Applies to: **v16**
 
@@ -261,7 +332,7 @@ tile is still missing for a specific existing user, Reset layout for that user.
 
 ---
 
-## 6. Ordered diagnosis — "my app is invisible on v16"
+## 7. Ordered diagnosis — "my app is invisible on v16"
 
 Run these in order; each step gates the next:
 
@@ -288,12 +359,12 @@ bench --site <site> execute frappe.utils.install.auto_generate_icons_and_sidebar
 # 6. Assets reachable?
 curl -so /dev/null -w "%{http_code} %{content_type}\n" https://<site>/assets/<app>/images/<logo>.svg
 
-# 7. bench --site <site> clear-cache, hard refresh, then per-user Reset layout.  (§5)
+# 7. bench --site <site> clear-cache, hard refresh, then per-user Reset layout.  (§6)
 ```
 
 ---
 
-## 7. Verification traps that produced false conclusions here
+## 8. Verification traps that produced false conclusions here
 
 All `[KANTISHIVA]`, all self-inflicted, all worth avoiding:
 

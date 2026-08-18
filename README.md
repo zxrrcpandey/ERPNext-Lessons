@@ -65,7 +65,7 @@ for the life of the server. Pick the OS to match the framework, not the other wa
 
 ---
 
-## The seven that bite hardest
+## The eight that bite hardest
 
 If you read nothing else before a deploy:
 
@@ -92,6 +92,11 @@ If you read nothing else before a deploy:
    v15, `/desk/...` on v16. One app with the other version's prefix degrades the
    post-login landing page for **every user on the site**. See
    [v16/desk-visibility-icons-and-launcher.md](v16/desk-visibility-icons-and-launcher.md).
+8. **v16 `bench migrate` deletes desk records that live only in the database.** Its
+   orphan sweep removes any Desktop Icon or Workspace Sidebar whose `app` is set but
+   has no backing JSON file in that app — so icons created by hand or by the
+   auto-generator vanish on the next migrate. Ship `<app>/desktop_icon/*.json` and
+   `<app>/workspace_sidebar/*.json`, exactly as ERPNext does. Same file §3.
 
 ---
 

@@ -575,6 +575,8 @@ it is). What it took is recorded in
 | `unknown log format "main"` | v16 default path | bench emits `access_log ... main`; Debian/Ubuntu nginx defines no such format → §9 |
 | exit code `137` on `bench build` | v16 in practice | genuine OOM kill during the erpnext Vite build → §8 |
 | exit code `143` on `bench build` | both | SIGTERM, **not** OOM — usually an app missing from `sites/apps.txt` → v15 file, Lesson 3 |
+| `Removing orphan Desktop Icons` + `Deleting entity Desktop Icon <name>` in `bench migrate` output | v16 | migrate's orphan sweep deletes any standard Desktop Icon / Workspace Sidebar with `app` set but no backing JSON file in the app → ship `<app>/desktop_icon/*.json` and `<app>/workspace_sidebar/*.json` → [desk-visibility-icons-and-launcher.md](desk-visibility-icons-and-launcher.md) §3 |
+| `OperationalError: (1054, "Unknown column 'color' in 'SELECT'")` on `tabDesktop Icon` | v16 | the rebuilt Desktop Icon renamed `color` → `bg_color` → same file §3 |
 | `subprocess.CalledProcessError: Command 'sudo supervisorctl status' returned non-zero exit status 1.` | both, at the **end** of `bench get-app` | cosmetic — clone and pip install already succeeded; `frappe` can't sudo non-interactively → [../apps/installing-third-party-apps.md](../apps/installing-third-party-apps.md) §2 |
 | `sudo: interactive authentication is required` | `sudo -u frappe sudo …` | sudo-group membership without a NOPASSWD rule; `bench setup sudoers` covers nginx/certbot only, **not** supervisorctl → same file §2 |
 
