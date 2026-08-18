@@ -11,6 +11,7 @@ server.
 ```bash
 grep -rn "Chromium took too long" .
 grep -rn "ZoneInfoNotFoundError" .
+grep -rn "sudo supervisorctl status" .
 ```
 
 ---
@@ -23,6 +24,9 @@ grep -rn "ZoneInfoNotFoundError" .
 | Understand **what v16 changed** before committing | [v16/what-changed-from-v15.md](v16/what-changed-from-v15.md) |
 | Keep an existing **v15 client** running | [v15/install-and-gotchas.md](v15/install-and-gotchas.md) |
 | Build or port a **custom app** | [apps/custom-app-development.md](apps/custom-app-development.md) |
+| Install a **v15-built app onto v16** | [apps/installing-a-v15-app-on-v16.md](apps/installing-a-v15-app-on-v16.md) |
+| Port a **large v15 app** (many doctypes) to v16 | [apps/porting-a-large-app-to-v16.md](apps/porting-a-large-app-to-v16.md) |
+| Install a **third-party app** (india_compliance, HRMS, LMS) | [apps/installing-third-party-apps.md](apps/installing-third-party-apps.md) |
 | **Back up, restore or move** a site | [operations/backup-restore-and-migration.md](operations/backup-restore-and-migration.md) |
 | Sort out **nginx / SSL / supervisor** | [operations/ssl-nginx-and-production.md](operations/ssl-nginx-and-production.md) |
 | **Secure** a deployment, or check one for compromise | [operations/security.md](operations/security.md) |
@@ -60,7 +64,7 @@ for the life of the server. Pick the OS to match the framework, not the other wa
 
 ---
 
-## The five that bite hardest
+## The six that bite hardest
 
 If you read nothing else before a deploy:
 
@@ -77,6 +81,10 @@ If you read nothing else before a deploy:
    inside the bench break the runtime in ways that surface much later.
 5. **Custom Fields created through the UI never reach git.** Without a `fixtures` entry or
    an `install.py`, they exist in exactly one database and vanish on the next fresh site.
+6. **Never judge `bench get-app` by its exit code.** It can fail *early* (real breakage,
+   app missing from `apps.txt`) or fail *late* on a cosmetic `sudo supervisorctl status`
+   with everything installed correctly. Same non-zero exit, opposite responses — check
+   `apps.txt`, the import and the git tag instead.
 
 ---
 
