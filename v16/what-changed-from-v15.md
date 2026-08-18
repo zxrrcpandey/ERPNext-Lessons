@@ -460,7 +460,7 @@ v15 file, Lesson 3.
 
 ## 9. Smaller deltas that will still surprise you
 
-**Applies to: v16 unless noted.** All `[SOURCE-VERIFIED]`.
+**Applies to: v16 unless noted.** All `[SOURCE-VERIFIED]` unless a row carries its own tags.
 
 | Area | v15 → v16 |
 |---|---|
@@ -475,6 +475,9 @@ v15 file, Lesson 3.
 | `socketio_backend` | new key in `common_site_config.json`; `"python"` is reserved for a `frappe.realtime.server` that **does not exist** in v16. Do not set it. |
 | `[tool.uv] exclude-newer` | v16's pyproject carries `exclude-newer = "7 days"`. Whether bench's `uv pip install` honours it is `[UNVERIFIED]` — if it does, resolution deliberately ignores anything published in the last week. Only matters when chasing a just-released fix. |
 | Click | v16 pins `Click~=8.3.1` while bench 5.31.0 wants `click~=8.2.0`; expect a cosmetic pip resolver complaint. Do not train yourself to ignore resolver errors — a real one looks identical. |
+| Desk URL prefix | `/app/*` → **`/desk/*`** (`router.js is_app_route()` tests `path[0] === "desk"`) `[V15-LOCAL router.js:119 vs 16.14 checkout router.js:110; KANTISHIVA]`. Old `/app/...` URLs answer **301 with an empty body** — a full page reload in the browser, and in `curl` it looks like the site is down. Grep ported apps for hardcoded `"/app/` links. |
+| `add_to_apps_screen` route check | `is_desk_apps()` validates `^/app(/.*)?$` on v15 but `^/desk(/.*)?$` on v16 `[V15-LOCAL apps.py:82 vs 16.14 apps.py:16]` — a v15-correct route on v16 flips `get_default_path()` and **degrades every user's post-login landing page**. Full story: [desk-visibility-icons-and-launcher.md](desk-visibility-icons-and-launcher.md). |
+| Desktop Icon doctype | dormant pre-v13 leftover (`module_name`/`blocked`/`force_show`/`color`) → **rebuilt as the desk tile grid** (`icon_type`/`link_type`/`parent_icon`/`bg_color`), auto-generated per app install via the new `after_app_install = auto_generate_icons_and_sidebar` hook `[V15-LOCAL + 16.14 checkout + KANTISHIVA]`. Same doctype name, incompatible schema — `color` became `bg_color`. |
 | Production wiring | **unchanged.** `bench setup production <user>` still means supervisor + nginx, same program names, systemd still opt-in. |
 | `bench setup production` | still aborts on `bench setup role fail2ban` (needs Ansible) — true on v15's bench 5.29.0 too. Install fail2ban with apt and run `bench setup supervisor --yes` / `bench setup nginx --yes` individually. |
 | nginx | **not a v16 change.** `unknown log format "main"` fires whenever `bench setup nginx` is run standalone — fix with `/etc/nginx/conf.d/00-log-format.conf`, which sorts before `frappe-bench.conf` `[KANTISHIVA]`. **v15's bench 5.29.0 has the same defaults** (`bench setup nginx` → `--logging combined`, `--log_format main`, `bench/commands/setup.py:28-41` → `config/nginx.py:49-53` → `templates/nginx.conf:124`); only `bench setup production` escapes it, because it calls `make_nginx_conf(bench_path, yes=yes)` with no `logging` argument. |
@@ -488,7 +491,7 @@ v15 file, Lesson 3.
 | Situation | Do this |
 |---|---|
 | New client, no custom app, no legacy data | **v16 on Ubuntu 26.04.** No reason to start on v15 in 2026. |
-| New client, wants one of our existing apps (`trustbit_mandi`, `item_creator`, …) | **v15 on 22.04/24.04**, or budget a real port. The apps are not v16-ready today. |
+| New client, wants one of our existing apps (`trustbit_mandi`, `item_creator`, …) | ~~v15, or budget a real port — the apps are not v16-ready~~ **Update 2026-08-18: both apps are ported and running on v16 at Kantishiva.** The port cost and its findings are in [../apps/porting-a-large-app-to-v16.md](../apps/porting-a-large-app-to-v16.md); any *other* v15 app still needs that same budget. |
 | Existing v15 client, running fine | **Leave it.** There is no operational pressure; v15 boxes need no OS change. |
 | Existing v15 client on 22.04 nearing EOL | Move to **24.04 on v15** (Python 3.12 satisfies `>=3.10,<3.14`) — that is a small job. 26.04 forces the v16 migration whether you wanted it or not. |
 | Client explicitly wants v16 features + has custom apps | Scope it as a migration project with its own budget. Do not fold it into a hosting move. |
@@ -529,6 +532,12 @@ explicitly recorded as pending decisions, because moving them is "a real migrati
 breaking API changes, not a reinstall" `[KANTISHIVA]`. That was the right call and it is
 the default posture: **a v16 build is a new system, not an upgrade, until someone has done
 the port work.**
+
+**Update 2026-08-18:** the port work has since been done — both apps are installed and
+verified on Kantishiva (code port, no data migration; the v15 Mandi database stays where
+it is). What it took is recorded in
+[../apps/porting-a-large-app-to-v16.md](../apps/porting-a-large-app-to-v16.md) and
+[desk-visibility-icons-and-launcher.md](desk-visibility-icons-and-launcher.md).
 
 ### Honest gaps
 

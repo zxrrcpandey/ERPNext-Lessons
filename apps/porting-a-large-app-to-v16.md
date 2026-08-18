@@ -281,6 +281,35 @@ were both created on install. Only the `type`/`app` fields were missing.
 
 ---
 
+## 8. Workspace fixed — and still no icon in the launcher or on the desk
+
+Applies to: **both versions** (the gate), **v16** (the route value and the tiles)
+
+Fixing §7 makes the workspace render **when you navigate to it**. It puts nothing in
+the app switcher and nothing on the desk tile grid — those are separate surfaces with
+separate mechanisms, and chasing Workspace fields to fix them wastes hours (it did
+here). The short version:
+
+1. **`frappe.apps.get_apps()` skips any app without an `add_to_apps_screen` hook** —
+   silently, on v15 and v16 alike. The `bench new-app` boilerplate ships the hook
+   commented out, so a custom app's default state is: no launcher icon, ever, no error
+   anywhere.
+2. **The hook's `route` prefix flips between majors**: v15 validates `^/app(/.*)?$`,
+   v16 validates `^/desk(/.*)?$`. Worse than the icon: one app with the wrong prefix
+   makes `is_desk_apps()` false, and `get_default_path()` then degrades the
+   **post-login landing page for every user on the site**.
+3. **Desk tiles come from the v16 `Desktop Icon` doctype** (rebuilt — v15's namesake
+   is a dead pre-v13 leftover), auto-generated per app install from the hook and from
+   public workspaces. Branded tile artwork is per-app SVG files at
+   `public/icons/desktop_icons/{solid,subtle}/<scrub(label)>.svg`; without them the
+   app sits as a grey letter tile. Existing users may need **Reset layout** to see new
+   tiles.
+
+Full mechanics, code refs, and an ordered diagnosis checklist:
+[../v16/desk-visibility-icons-and-launcher.md](../v16/desk-visibility-icons-and-launcher.md).
+
+---
+
 ## What did NOT break
 
 Verified by diffing 15.100.0/15.97.0 against 16.31.0/16.32.1, so nobody re-audits it:
