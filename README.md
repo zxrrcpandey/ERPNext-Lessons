@@ -26,6 +26,7 @@ grep -rn "sudo supervisorctl status" .
 | Build or port a **custom app** | [apps/custom-app-development.md](apps/custom-app-development.md) |
 | Install a **v15-built app onto v16** | [apps/installing-a-v15-app-on-v16.md](apps/installing-a-v15-app-on-v16.md) |
 | Port a **large v15 app** (many doctypes) to v16 | [apps/porting-a-large-app-to-v16.md](apps/porting-a-large-app-to-v16.md) |
+| Make an app **visible on the desk** (launcher icon, desktop tile, workspace) | [v16/desk-visibility-icons-and-launcher.md](v16/desk-visibility-icons-and-launcher.md) |
 | Install a **third-party app** (india_compliance, HRMS, LMS) | [apps/installing-third-party-apps.md](apps/installing-third-party-apps.md) |
 | **Back up, restore or move** a site | [operations/backup-restore-and-migration.md](operations/backup-restore-and-migration.md) |
 | Sort out **nginx / SSL / supervisor** | [operations/ssl-nginx-and-production.md](operations/ssl-nginx-and-production.md) |
@@ -64,7 +65,7 @@ for the life of the server. Pick the OS to match the framework, not the other wa
 
 ---
 
-## The six that bite hardest
+## The seven that bite hardest
 
 If you read nothing else before a deploy:
 
@@ -85,6 +86,12 @@ If you read nothing else before a deploy:
    app missing from `apps.txt`) or fail *late* on a cosmetic `sudo supervisorctl status`
    with everything installed correctly. Same non-zero exit, opposite responses — check
    `apps.txt`, the import and the git tag instead.
+7. **A custom app is invisible on the desk by default, and a wrong `add_to_apps_screen`
+   route hurts everyone.** The boilerplate ships the hook commented out (no launcher
+   icon, ever, silently), and the route prefix flips between majors — `/app/...` on
+   v15, `/desk/...` on v16. One app with the other version's prefix degrades the
+   post-login landing page for **every user on the site**. See
+   [v16/desk-visibility-icons-and-launcher.md](v16/desk-visibility-icons-and-launcher.md).
 
 ---
 
