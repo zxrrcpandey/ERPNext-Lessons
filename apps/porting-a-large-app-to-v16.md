@@ -210,6 +210,76 @@ Year — which is exactly what happened to us once, and had to be thrown away.
 
 ---
 
+---
+
+## 7. A v15 workspace is invisible on v16 (required `type` field)
+
+Applies to: **v16 only** — affects *every* v15-authored workspace
+
+**Symptom:** the app installs, `bench migrate` is clean, the Workspace record exists with
+all its shortcuts and links — and **nothing appears in the desk sidebar**.
+
+**Cause:** v16 added two fields to Workspace that v15 does not have:
+
+| Field | v16 definition |
+|---|---|
+| `type` | Select `Workspace / Link / URL`, **reqd=1**, default `"Workspace"` |
+| `app` | Data — v16 groups the sidebar by it |
+
+A v15-authored `workspace.json` carries neither. The record imports with both **NULL**
+(import bypasses mandatory validation) and the sidebar skips it. It also cannot be re-saved
+through the ORM:
+
+```
+frappe.exceptions.MandatoryError: [Workspace, <name>]: type
+```
+
+Compare a working one — every ERPNext workspace has `type="Workspace"`, `app="erpnext"`.
+
+**Fix — set both in the shipped JSON:**
+
+```json
+{
+ "doctype": "Workspace",
+ "name": "Mandi",
+ "module": "Trustbit Mandi",
+ "type": "Workspace",
+ "app": "trustbit_mandi",
+ ...
+}
+```
+
+`app` is normally derived in `Workspace.validate()`
+(`workspace.py:102`, `self.app = get_module_app(self.module)`), but that only runs on
+**save** — a fresh JSON import never triggers it, so set it explicitly.
+
+**Repair an already-installed site** (the ORM will refuse until `type` is set):
+
+```python
+frappe.db.set_value("Workspace", "<name>", "type", "Workspace", update_modified=False)
+frappe.db.commit()
+frappe.get_doc("Workspace", "<name>").save(ignore_permissions=True)   # now populates app
+```
+
+**Verify what the browser actually receives** rather than trusting the DB:
+
+```bash
+curl -s "https://<site>/desk/<workspace>?sid=$SID" | grep -o '"name":"<Name>".\{0,30000\}' \
+  | grep -o '"app":[^,]*'
+```
+
+> Two traps while checking this. The desk prefix is **`/desk/`** on v16 — `curl` to
+> `/app/...` gets a 301 with an **empty body**, which looks like the site is down. And the
+> workspace `content` blob is enormous, so a short regex window lands on the wrong object
+> and reports `app=null` when the value is actually set further along.
+
+**Related:** v16 also builds the sidebar from a new **`Workspace Sidebar`** doctype
+(`frappe/boot.py:get_sidebar_items`), auto-generating one per Module Def that lacks a
+record. That part worked correctly for a v15 app — the Module Def and Workspace Sidebar
+were both created on install. Only the `type`/`app` fields were missing.
+
+---
+
 ## What did NOT break
 
 Verified by diffing 15.100.0/15.97.0 against 16.31.0/16.32.1, so nobody re-audits it:
