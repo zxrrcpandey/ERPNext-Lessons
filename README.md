@@ -25,6 +25,7 @@ grep -rn "sudo supervisorctl status" .
 | Keep an existing **v15 client** running | [v15/install-and-gotchas.md](v15/install-and-gotchas.md) |
 | Build or port a **custom app** | [apps/custom-app-development.md](apps/custom-app-development.md) |
 | Install a **v15-built app onto v16** | [apps/installing-a-v15-app-on-v16.md](apps/installing-a-v15-app-on-v16.md) |
+| Port a **large v15 app** (many doctypes) to v16 | [apps/porting-a-large-app-to-v16.md](apps/porting-a-large-app-to-v16.md) |
 | Install a **third-party app** (india_compliance, HRMS, LMS) | [apps/installing-third-party-apps.md](apps/installing-third-party-apps.md) |
 | **Back up, restore or move** a site | [operations/backup-restore-and-migration.md](operations/backup-restore-and-migration.md) |
 | Sort out **nginx / SSL / supervisor** | [operations/ssl-nginx-and-production.md](operations/ssl-nginx-and-production.md) |
