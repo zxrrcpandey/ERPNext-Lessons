@@ -156,6 +156,52 @@ exactly like its app's title collides with the app icon — frappe resolves it b
 hiding one, but a workspace named like a *different* app's title simply loses.
 Namespace your workspace titles (same discipline as report names).
 
+### ⚠ The next `bench migrate` DELETES database-only desk records
+
+Learned the hard way, hours after the tiles first worked `[KANTISHIVA]`: migrate
+runs `remove_orphan_entities()` (`frappe/model/sync.py`), which — for the
+app-level entities **Desktop Icon, Workspace Sidebar and Sidebar Item Group** —
+deletes **any record whose `app` is set but has no backing JSON file** at
+`<app>/<scrubbed_doctype>/<scrub(name)>.json`. Verbatim from our migrate log:
+
+```
+Removing orphan Desktop Icons
+Deleting entity Desktop Icon Trustbit Mandi
+Deleting entity Desktop Icon Mandi
+Deleting entity Desktop Icon Item Management
+```
+
+So records created by the auto-generator (or by hand in the console) are live
+grenades: they work until the next migrate, then vanish. **ERPNext's tiles
+survive every migrate because it ships `erpnext/desktop_icon/*.json` — the same
+sync that runs the orphan sweep re-imports file-backed records.** Ship yours the
+same way, two files per app:
+
+```jsonc
+// <app>/desktop_icon/<scrub(app_title)>.json — the App icon (hidden parent)
+{"doctype": "Desktop Icon", "name": "Trustbit Mandi", "label": "Trustbit Mandi",
+ "icon_type": "App", "link_type": "External", "link": "/desk/mandi",
+ "logo_url": "/assets/trustbit_mandi/images/trustbit-mandi.svg",
+ "hidden": 1, "standard": 1, "app": "trustbit_mandi", "idx": 100,
+ "modified": "2026-08-18 23:00:00.000000", "roles": []}
+
+// <app>/desktop_icon/<scrub(workspace_name)>.json — the visible tile
+{"doctype": "Desktop Icon", "name": "Mandi", "label": "Mandi",
+ "icon_type": "Link", "link_type": "Workspace Sidebar", "link_to": "Mandi",
+ "parent_icon": "Trustbit Mandi", "icon": "agriculture",
+ "hidden": 0, "standard": 1, "app": "trustbit_mandi", "idx": 1,
+ "modified": "2026-08-18 23:00:00.000000", "roles": []}
+```
+
+Filenames come from `frappe.scrub(name)` — `"Item Management"` →
+`item_management.json`. The `modified` timestamp must be **newer than the DB
+row's** or the import is skipped as already-current. The same rule applies to
+**Workspace Sidebar**: a sidebar customized only in the database is equally
+orphan-swept; ship `<app>/workspace_sidebar/<scrub(title)>.json`.
+
+Verified: after shipping all four files, a repeat migrate deleted nothing and
+re-imported the records `[KANTISHIVA]`.
+
 ---
 
 ## 4. Branded tiles are per-app SVG **files**, not a doctype field
@@ -235,7 +281,8 @@ bench --site <site> console
 >>> frappe.get_all("Desktop Icon", filters={"app": "<app>"},
 ...     fields=["label","icon_type","link_type","hidden"]) # tile records
 
-# 5. Records missing? Regenerate (safe to re-run):
+# 5. Records missing? Regenerate (safe to re-run) — BUT this only lasts until
+#    the next migrate unless the records are file-backed; see §3's warning:
 bench --site <site> execute frappe.utils.install.auto_generate_icons_and_sidebar
 
 # 6. Assets reachable?

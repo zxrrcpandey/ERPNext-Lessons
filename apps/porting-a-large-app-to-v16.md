@@ -304,6 +304,11 @@ here). The short version:
    `public/icons/desktop_icons/{solid,subtle}/<scrub(label)>.svg`; without them the
    app sits as a grey letter tile. Existing users may need **Reset layout** to see new
    tiles.
+4. **Every `bench migrate` deletes Desktop Icon / Workspace Sidebar records that have
+   no backing JSON file in their app** (`remove_orphan_entities()`), so auto-generated
+   or hand-created records vanish on the next migrate. Ship them as
+   `<app>/desktop_icon/*.json` and `<app>/workspace_sidebar/*.json`, exactly as
+   ERPNext does.
 
 Full mechanics, code refs, and an ordered diagnosis checklist:
 [../v16/desk-visibility-icons-and-launcher.md](../v16/desk-visibility-icons-and-launcher.md).
