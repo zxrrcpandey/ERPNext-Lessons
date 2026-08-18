@@ -182,6 +182,9 @@ frappe.get_all("Error Log", fields=["method","error"], order_by="creation desc",
 
 ## 6. Test harness: a bare site is not a realistic site
 
+Applies to: **both versions** — a harness gap, not a version bug (see the
+`set_stock_entry_type` note below).
+
 The single biggest time sink. `bench new-site --install-app erpnext` gives you **none** of
 the master data the **setup wizard** creates. We hit these one at a time, four rounds:
 
@@ -207,8 +210,6 @@ kind = "HARNESS GAP" if any(h in type(e).__name__ for h in HARNESS) else "REAL F
 
 Without that, a catch-all prints a confident **"BLOCKER CONFIRMED"** for a missing Fiscal
 Year — which is exactly what happened to us once, and had to be thrown away.
-
----
 
 ---
 

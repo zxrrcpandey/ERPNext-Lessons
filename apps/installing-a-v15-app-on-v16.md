@@ -40,6 +40,10 @@ no amount of frappe/erpnext diffing would have surfaced.
 
 ## Lesson 1 — india_compliance makes HSN/SAC mandatory, and it is a Link
 
+Applies to: **any site with india_compliance** — observed on IC 16.8.4 / v16, but the hook
+is india_compliance's, not the framework's, so expect it on the v15 track (IC 15.25.4) too
+`[v15 not re-tested]`.
+
 **Symptom.** Item creation fails at the very last step, after a code has already been
 minted:
 
@@ -164,7 +168,8 @@ comes back `disabled=0`, and the subsequent variant insert succeeds.
 
 ## Lesson 3 — what did NOT break (so nobody re-audits it)
 
-Verified by diffing 15.100.0/15.97.0 against 16.31.0/16.32.1:
+Applies to: **the v15 → v16 boundary** — negative results from diffing
+15.100.0/15.97.0 against 16.31.0/16.32.1:
 
 - **Item fields:** all 20 fieldnames the app writes exist in v16 with identical fieldtype
   and options. The only Item fields v16 *removed* are `customer`, `column_break2` and

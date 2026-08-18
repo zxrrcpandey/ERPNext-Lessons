@@ -1,5 +1,8 @@
 # Installing Third-Party Apps (`bench get-app`)
 
+Applies to: **v15 and v16** — each numbered lesson carries its own marking where the
+versions differ; the reference sections (§7–9) apply to both.
+
 Installing an app you don't control — `india_compliance`, HRMS, LMS — onto an existing
 production bench. The failure modes are different from building your own app
 ([custom-app-development.md](custom-app-development.md)) because you cannot change the
