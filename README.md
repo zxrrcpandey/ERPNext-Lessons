@@ -31,6 +31,7 @@ grep -rn "sudo supervisorctl status" .
 | **Back up, restore or move** a site | [operations/backup-restore-and-migration.md](operations/backup-restore-and-migration.md) |
 | Sort out **nginx / SSL / supervisor** | [operations/ssl-nginx-and-production.md](operations/ssl-nginx-and-production.md) |
 | **Secure** a deployment, or check one for compromise | [operations/security.md](operations/security.md) |
+| Debug a site that **"loads forever" / users say they're "banned"** — 504s, `WORKER TIMEOUT`, retry storms | [operations/worker-timeout-death-spiral.md](operations/worker-timeout-death-spiral.md) |
 
 ---
 
@@ -65,7 +66,7 @@ for the life of the server. Pick the OS to match the framework, not the other wa
 
 ---
 
-## The eight that bite hardest
+## The ten that bite hardest
 
 If you read nothing else before a deploy:
 
@@ -97,6 +98,18 @@ If you read nothing else before a deploy:
    has no backing JSON file in that app — so icons created by hand or by the
    auto-generator vanish on the next migrate. Ship `<app>/desktop_icon/*.json` and
    `<app>/workspace_sidebar/*.json`, exactly as ERPNext does. Same file §3.
+9. **A frappe upgrade can push old N+1 code over the worker-timeout cliff — and
+   `@redis_cache` writes only on success.** frappe ≥ 15.101 sqlparse-parses every
+   generated query; an endpoint that then exceeds gunicorn's `-t 120` is killed
+   *before* its cache is ever written, and an unguarded client retry loop turns that
+   one slow endpoint into a site-wide outage that users report as "being banned".
+   584 × 504 over four mornings. See
+   [operations/worker-timeout-death-spiral.md](operations/worker-timeout-death-spiral.md).
+10. **"We are banned" has at least four distinct causes — triage with evidence, in
+   order:** firewall (fail2ban/ipset/`xt_recent`) → does the traffic even reach nginx
+   (zero access-log hits = dead bookmark/DNS/ISP, not a block) → app auth (2FA typo
+   noise is not a lockout) → capacity (504 tallies, `WORKER TIMEOUT`, load). Never fix
+   a rung you haven't proven guilty. Same file §1.
 
 ---
 
