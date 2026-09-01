@@ -760,8 +760,117 @@ Verified   4/4 sites HTTPS 200 · 52/52 assets each · socket.io 200
 
 ---
 
+---
+
+# Part 2 — the same day, after "done"
+
+Five more failures found while adding backups and a v16 guest to the machine above. They are
+here rather than in a separate log because they are the same box, the same afternoon, and
+they show what "finished" actually costs.
+
+## 15. A restore drill that passed while proving nothing
+
+The first drill reported success and had restored **nothing**:
+
+```
+Error: Got unexpected extra argument (…-private-files.tar)
+```
+
+`bench restore` aborted on a malformed argument, the script carried on, and every check that
+followed — *site loads*, *encryption key matches*, *decryption works* — passed against the
+**freshly-created empty site**. All true, all meaningless.
+
+Two causes worth separating:
+
+- **`--with-public-files` / `--with-private-files` take a path as the option value**, and the
+  glob `*-files.tar` also matches `*-private-files.tar`. Resolve paths into variables and
+  assert they are real files *before* invoking restore.
+- **The verification asserted the wrong things.** "Did it error" is not evidence.
+
+Verify with numbers only real data can produce: **[verified]**
+
+```
+apps     : frappe 15.119.1 + erpnext 15.120.0   ← a fresh site has only frappe
+doctypes : 776                                   ← a fresh site has far fewer
+tables   : 707
+users    : 3                                     ← a fresh site has 2
+```
+
+Full write-up: [operations/backup-restore-and-migration.md §7.2](../operations/backup-restore-and-migration.md).
+
+## 16. `encryption_key` did not exist on any site
+
+Escrowing the keys produced `keys present: 0/4`. Not a bug — **Frappe generates
+`encryption_key` lazily, on first encryption**, so four freshly-built sites had configs
+containing only `db_name`, `db_password`, `db_type`, `developer_mode`, `host_name`.
+
+The danger is the false sense of safety: escrow early, feel covered, and the real key is
+generated weeks later on a live site the moment someone configures an Email Account — after
+which every backup depends on a value the escrow does not have.
+
+```bash
+bench --site <site> execute frappe.utils.password.get_encryption_key   # force it at build time
+```
+
+Do it during provisioning, then re-escrow on every backup run.
+
+## 17. `ZoneInfoNotFoundError: 'Asia/Calcutta'` — the doc called it
+
+The setup wizard on the **v16 guest** failed exactly as
+`v15/install-and-gotchas.md` predicted. Three things the prediction did not cover, now
+confirmed:
+
+- It is **24.04 *and later*** — 26.04 inherits the same split.
+- The **setup wizard** is where it surfaces, because Frappe's country selector offers the
+  deprecated alias `Asia/Calcutta` for India.
+- **The failure hides itself**: `frappe.log_error()` raises for the same reason while
+  recording the error, so nothing reaches the Error Log.
+
+And it was **latent on the v15 host too** — four sites had been serving traffic for hours
+with `Asia/Calcutta` unresolvable, because nothing had asked for a timezone yet. Patch every
+24.04+ box at build time. See
+[v15/v15-on-ubuntu-2404.md §6.1](../v15/v15-on-ubuntu-2404.md).
+
+## 18. Two concurrent `apt` runs look like package-database corruption
+
+Running `apt` on the host and inside the guest simultaneously produced:
+
+```
+E: The package lists or status file could not be parsed or opened.
+```
+
+on a system with **no** broken packages — `dpkg --audit` clean, `apt-get check` clean and
+`apt-get update` returning 0 moments later. Both recovered on retry. When automating across
+host and guest, serialise package operations; the message reads like corruption and is not.
+
+## 19. `cloudflared --config` is a global flag
+
+```
+Incorrect Usage: flag provided but not defined: -config
+```
+
+It goes **before** the subcommand: `cloudflared --config FILE tunnel ingress validate`. Put
+it after and the validation you believed you ran did not run. Also: `service install`
+copies the config to `/etc/cloudflared/` — editing only `~/.cloudflared/config.yml` changes
+nothing for the running service.
+
+## What Part 2 added to the box
+
+```
+backups     02:30 & 14:30, --with-files, restore-drill verified, keys escrowed
+v16 guest   KVM on 32 GB of unallocated LVM — Ubuntu 26.04 · Python 3.14.4
+            MariaDB 11.8.6 · Frappe 16.32.0 · ERPNext 16.33.0
+exposure    one tunnel, five hostnames, host + guest
+```
+
+Still absent, and worth naming again: **offsite** backups (local-only), **SMTP** on both
+stacks, **monitoring**, and **any backup job at all inside the guest**.
+
+---
+
 ## See also
 
+- [operations/running-v15-and-v16-side-by-side.md](../operations/running-v15-and-v16-side-by-side.md) — the v16 guest, in full
 - [operations/cloudflare-tunnel.md](../operations/cloudflare-tunnel.md) — the exposure topology in full
 - [operations/bare-metal-and-firmware.md](../operations/bare-metal-and-firmware.md) — HP ML10 Gen9, AMT, BIOS, disks
 - [v15/v15-on-ubuntu-2404.md](../v15/v15-on-ubuntu-2404.md) — the 24.04-specific traps, consolidated

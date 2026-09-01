@@ -309,6 +309,68 @@ sudo timedatectl set-timezone Asia/Kolkata
 Set the OS timezone **before** creating sites; every log line, scheduled job and backup
 timestamp depends on it, and a box left on UTC makes incident timelines needlessly hard.
 
+### 6.1 Hit for real — and it is not v15-only, nor scheduler-only
+
+Reproduced on 2026-09-01, on **v16 / Ubuntu 26.04**, during the **setup wizard**. Two
+corrections to the framing above: **[verified]**
+
+**It is 24.04 *and later*, not "24.04 only."** 26.04 inherits the same `tzdata` /
+`tzdata-legacy` split. A fresh v16 box is equally exposed.
+
+**The setup wizard is where most people meet it**, not the scheduler. Frappe's country
+selector offers the **deprecated alias** `Asia/Calcutta` for India, so choosing India on a
+clean install submits a key `zoneinfo` cannot resolve:
+
+```
+"timezone":"Asia/Calcutta"
+...
+zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Asia/Calcutta'
+ModuleNotFoundError: No module named 'tzdata'
+```
+
+**The failure cascades in a way that hides it.** `System Settings.save()` raises, then
+`frappe.log_error()` raises *for the same reason* while trying to record it — because
+`log_error` → `insert()` → `set_user_and_timestamp()` → `now()` → `ZoneInfo(...)`. So
+nothing lands in the Error Log and the user gets a raw traceback:
+
+```
+File "apps/frappe/frappe/desk/page/setup_wizard/setup_wizard.py", line 137, in process_setup_stages
+    frappe.log_error(title=f"Setup failed: {message}")
+  ...
+  File "apps/frappe/frappe/utils/data.py", line 373, in now_datetime
+    return datetime.datetime.now(ZoneInfo(get_system_timezone())).replace(tzinfo=None)
+```
+
+**It is latent on any 24.04+ box until someone runs a wizard.** The four v15 demo sites on
+the reference host had been serving traffic for hours with `Asia/Calcutta` unresolvable —
+nothing had asked for a timezone yet. Checked directly:
+
+```console
+$ ./env/bin/python -c "from zoneinfo import ZoneInfo; ZoneInfo('Asia/Calcutta')"
+zoneinfo._common.ZoneInfoNotFoundError: 'No time zone found with key Asia/Calcutta'
+```
+
+**So patch it at build time on every 24.04+ box, before anyone opens a wizard:**
+
+```bash
+sudo apt-get install -y tzdata-legacy
+./env/bin/pip install tzdata          # Python-level fallback
+bench restart
+```
+
+Verify against the exact failing path rather than just the import:
+
+```bash
+bench --site <site> console
+>>> import frappe
+>>> frappe.db.set_single_value("System Settings","time_zone","Asia/Calcutta"); frappe.db.commit()
+>>> from frappe.utils.data import now_datetime; now_datetime()
+datetime.datetime(2026, 9, 1, 9, 36, 37, 750837)      # resolves — fix confirmed
+```
+
+The wizard fails **cleanly** — `setup_complete` stays `0`, zero companies are created, and
+`time_zone` is left `NULL`, so simply re-run it after patching. No cleanup needed.
+
 ---
 
 ## 7. Multi-tenant tuning — `table_open_cache` on one bench

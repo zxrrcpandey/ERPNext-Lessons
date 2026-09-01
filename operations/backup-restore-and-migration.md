@@ -649,6 +649,107 @@ The Mandi production site had **no** `encryption_key` **[B]** — verified again
 backed-up config carries only `db_name`, `db_password`, `db_type`, `developer_mode`
 **[V]**. That is why that restore was clean. Do not assume the next one will be.
 
+### 7.1 Why a site has no key — it is generated *lazily*, and that is preventable
+
+This is not random. **Frappe does not create `encryption_key` at `bench new-site`; it
+creates it the first time something is actually encrypted.** Four freshly-built v15 sites,
+checked on 2026-09-01 — every one of them had a config containing only
+`db_name`, `db_password`, `db_type`, `developer_mode`, `host_name`, and **no key**
+**[verified]**:
+
+```console
+$ python3 -c "import json;print(sorted(json.load(open('sites/<site>/site_config.json')).keys()))"
+['db_name', 'db_password', 'db_type', 'developer_mode', 'host_name']
+```
+
+Two consequences that matter more than they first appear:
+
+1. **A backup taken before first encryption captures no key**, so a
+   `site_config_backup.json` from a young site protects nothing — there is nothing yet to
+   protect. Fine today; useless the moment someone configures an Email Account, because the
+   key is then generated on a live site and every backup *after* that point depends on a
+   value your escrow does not have.
+2. **An escrow built early goes stale silently.** You copy the keys off, feel covered, and
+   the real key appears a week later.
+
+**Force it at build time**, so every backup from the first one onward carries a stable key:
+
+```bash
+# generates and persists the key immediately — safe and idempotent on an existing site
+bench --site <site> execute frappe.utils.password.get_encryption_key
+
+# then escrow, and re-escrow on every backup run in case a site is reinstalled
+grep encryption_key sites/<site>/site_config.json
+```
+
+Do this for every site as part of provisioning, not as part of incident response.
+
+### 7.2 A restore drill can pass while proving nothing
+
+The drill is the point of the whole exercise, so it is worth being paranoid about **what
+you actually verified**. On this build the first drill reported success and had restored
+nothing:
+
+```
+Error: Got unexpected extra argument (…-private-files.tar)
+```
+
+`bench restore` aborted on a malformed argument, the script continued, and the checks that
+followed — "site loads", "key matches", "decryption works" — all passed **against the
+freshly-created empty site**. Every assertion was true and every one was meaningless.
+
+**Verify with numbers that can only come from real data**, never with "did it error":
+
+```bash
+bench --site <scratch> list-apps        # erpnext present, not just frappe
+bench --site <scratch> mariadb -e "SELECT COUNT(*) FROM tabDocType;"   # ~776 on ERPNext v15
+bench --site <scratch> mariadb -e "SELECT COUNT(*) FROM information_schema.tables
+                                   WHERE table_schema=DATABASE();"     # ~707
+```
+
+A fresh site has ~2 users, no `erpnext` in `list-apps`, and far fewer tables. Those three
+numbers separate a real restore from an empty one instantly.
+
+Also note the file arguments are **options taking a path**, and a wildcard like
+`*-files.tar` matches `-private-files.tar` too — which is exactly how the malformed
+invocation arose:
+
+```bash
+B=sites/<site>/private/backups
+SQL=$(ls -t $B/*-database.sql.gz | head -1)
+PUB=$(ls -t $B/*[0-9]-*-files.tar | grep -v private | head -1)
+PRIV=$(ls -t $B/*-private-files.tar | head -1)
+[ -f "$SQL" ] && [ -f "$PUB" ] && [ -f "$PRIV" ] || { echo "path resolution failed"; exit 1; }
+
+bench --site <scratch> restore "$SQL" \
+  --db-root-username root --db-root-password "$DBPW" \
+  --with-public-files "$PUB" --with-private-files "$PRIV"
+```
+
+Resolve the paths into variables and assert they are real files **before** invoking restore.
+
+### 7.3 The stock backup cron omits `--with-files`
+
+`bench setup production` installs a 6-hourly cron that runs `bench --site all backup`
+**without** `--with-files` **[verified — observed in `crontab -l` on a fresh 24.04 build]**:
+
+```
+0 */6 * * * cd /home/frappe/frappe-bench && .../bench --verbose --site all backup >> ... # bench auto backups set for every 6 hours
+```
+
+Every attachment, item image and uploaded PDF is therefore missing from the automated
+backups, and you find out during a restore. Replace it with your own job rather than
+supplementing it — two schedules churn `backup_limit` against each other.
+
+Also raise `backup_limit` (System Settings, default **3**). Pruning runs on a scheduler
+hook, so with a 6-hourly job the default leaves roughly a 12–18 hour window — a Friday
+incident found on Monday is already unrecoverable locally.
+
+```bash
+bench --site <site> execute frappe.db.set_single_value \
+  --args "['System Settings','backup_limit',8]"
+```
+
 Frappe's own docs link, emitted in the error above:
 `https://frappecloud.com/docs/sites/migrate-an-existing-site#encryption-key`.
 

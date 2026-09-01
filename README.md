@@ -35,6 +35,7 @@ grep -rn "sudo supervisorctl status" .
 | Run **v15 on Ubuntu 24.04** (not 22.04) | [v15/v15-on-ubuntu-2404.md](v15/v15-on-ubuntu-2404.md) |
 | Publish a bench with **no public IP / no port forwarding** (Cloudflare Tunnel) | [operations/cloudflare-tunnel.md](operations/cloudflare-tunnel.md) |
 | Build on **bare metal** — firmware, BIOS, disks, Intel AMT, out-of-band access | [operations/bare-metal-and-firmware.md](operations/bare-metal-and-firmware.md) |
+| Run **v15 and v16 on one machine** (KVM guest, one tunnel) | [operations/running-v15-and-v16-side-by-side.md](operations/running-v15-and-v16-side-by-side.md) |
 
 ### Build logs
 
@@ -43,7 +44,7 @@ the *order* things happened in, not just the isolated lesson.
 
 | Build | What it covers |
 |---|---|
-| [2026-09-01 — four v15 sites on bare metal via Cloudflare Tunnel](builds/2026-09-01-bare-metal-four-site-cloudflare-tunnel.md) | 14 failures end to end: firmware/AMT, USB imaging, `uv`, `log_format`, socketio `BACKOFF`, `HOME_MODE 0750`, cached 404s |
+| [2026-09-01 — four v15 sites on bare metal via Cloudflare Tunnel](builds/2026-09-01-bare-metal-four-site-cloudflare-tunnel.md) | **19 failures** end to end. Part 1: firmware/AMT, USB imaging, `uv`, `log_format`, socketio `BACKOFF`, `HOME_MODE 0750`, cached 404s. Part 2: a restore drill that proved nothing, lazy `encryption_key`, `tzdata-legacy`, concurrent `apt` |
 
 ---
 
@@ -63,8 +64,16 @@ Python pin dictates your operating system:
 | PDF | wkhtmltopdf only | wkhtmltopdf **+ Chromium/CDP** |
 
 Because v16 pins Python to the 3.14 series exactly, **only Ubuntu 26.04 ships a suitable
-system Python**. On 24.04 (Python 3.12) you would be maintaining a hand-built interpreter
-for the life of the server. Pick the OS to match the framework, not the other way round.
+system Python**. Pick the OS to match the framework, not the other way round.
+
+> **Nuance, measured 2026-09-01.** "You would be maintaining a hand-built interpreter"
+> overstates it: `uv python install 3.14` puts a pre-built CPython 3.14.7 on a 24.04 box in
+> **3.67 seconds**, isolated, leaving the system interpreter untouched — that is Astral's
+> `python-build-standalone`, not a source build. The conclusion above still holds for a
+> single-version server, but **Python is not the hard blocker; MariaDB is.** One host runs
+> one `mariadbd`, and v16 wants 11.8 while v15 clients sit on 10.6/10.11. If you need both
+> majors on one machine, isolate the database — see
+> [operations/running-v15-and-v16-side-by-side.md](operations/running-v15-and-v16-side-by-side.md).
 
 > **On the PDF row:** the genuinely new thing in v16 is the **Chromium/CDP** generator —
 > v15's `Print Format.pdf_generator` field exists but offers `wkhtmltopdf` alone.
@@ -136,6 +145,19 @@ If you read nothing else before a deploy:
    And when a static file 404s, **compare origin and edge separately** before touching
    anything — it distinguishes an app fault from a cache fault in one step. See
    [operations/cloudflare-tunnel.md](operations/cloudflare-tunnel.md) §6, §10.
+
+13. **A restore drill can pass while proving nothing.** `bench restore` aborted on a
+   malformed argument, the script continued, and "site loads / key matches / decryption
+   works" all passed **against the empty site that had just been created**. Never verify a
+   restore with "did it error" — verify with counts only real data produces
+   (`erpnext` in `list-apps`, ~776 doctypes, ~707 tables). See
+   [operations/backup-restore-and-migration.md](operations/backup-restore-and-migration.md) §7.2.
+14. **`encryption_key` does not exist until something is encrypted.** Four freshly-built
+   sites had **no key at all**, so an escrow taken at build time captured nothing — and the
+   real key appears later, on a live site, the moment someone configures an Email Account.
+   Force it during provisioning with `bench --site <site> execute
+   frappe.utils.password.get_encryption_key`, then re-escrow on every backup run. Same
+   file, §7.1.
 
 ---
 
