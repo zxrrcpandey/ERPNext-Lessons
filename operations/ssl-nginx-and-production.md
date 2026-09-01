@@ -599,6 +599,18 @@ nginx: [emerg] unknown log format "main" in /etc/nginx/conf.d/frappe-bench.conf
 `systemctl reload nginx` fails, `nginx -t` fails, and if you restarted rather than
 reloaded, the site is down.
 
+> **Reconfirmed on bench 5.31.0 / Ubuntu 24.04**, including the asymmetry described below —
+> `bench setup production` passed `nginx -t`, and a standalone `bench setup nginx --yes` one
+> minute later failed with exactly this error. The click defaults
+> (`--logging combined`, `--log_format main`) and `templates/nginx.conf:124` are unchanged
+> from the 5.29.0 analysis. Note it fails **safe**: nginx keeps serving the
+> already-loaded config, so a failed *reload* is not an outage — but the next reboot would
+> be. Field record:
+> [builds/2026-09-01-… §8](../builds/2026-09-01-bare-metal-four-site-cloudflare-tunnel.md).
+> If you are also adding real-IP directives for a CDN or tunnel, put the `log_format` in
+> the **same** `conf.d` prerequisite file — see
+> [cloudflare-tunnel.md §7](cloudflare-tunnel.md).
+
 **Root cause [V]** — two facts that only collide when you run `bench setup nginx` as a
 standalone command:
 

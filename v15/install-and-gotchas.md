@@ -3,6 +3,14 @@
 Everything Trustbit knows about running **Frappe/ERPNext v15 in production**, consolidated
 so v15 clients stay supportable while new builds move to v16.
 
+> **This document is written against Ubuntu 22.04 and bench 5.29.0.** If you are on
+> **Ubuntu 24.04** or a **current bench (5.31+)**, read
+> **[v15-on-ubuntu-2404.md](v15-on-ubuntu-2404.md)** alongside it. Two items below are
+> superseded there: the **socketio / nvm** failure mode (§2.1 — bench 5.31 fails *loudly* in
+> `BACKOFF`, not silently), and `uv` (it is required for v15 builds too, being a bench
+> property rather than a Frappe one). That file also documents `HOME_MODE 0750`, which
+> silently breaks nginx asset serving on 24.04 and does not exist on 22.04.
+
 **Sources** (all real deployments, no theory):
 
 | Source | What it covers |
@@ -186,6 +194,15 @@ Two hard mechanical requirements, both verified in bench 5.29.0:
   generated config. Result: a site that looks fine but has dead realtime — no notifications,
   no progress bars, no list auto-refresh, and no error anywhere.
   `[source: SERVER_KANTISHIVA.md §3 + the researched runbook, quoting bench/config/supervisor.py:48-49]`
+  > **Updated for bench 5.31.0 —** the advice (system-wide node) is unchanged and still
+  > correct, but the *failure mode* differs. bench 5.31 resolves node **twice**: once at
+  > generation time (deciding whether to write the stanza) and again at runtime inside
+  > `bench socketio`. The recommended `sudo -H env "PATH=$PATH" bench setup production`
+  > idiom exports nvm's node into the *generation* environment, so the stanza **is**
+  > written — and then fails in `BACKOFF` with
+  > `Cannot start socketio: node not found …` when supervisor starts it. Loud instead of
+  > silent. Full mechanism and fix:
+  > **[v15-on-ubuntu-2404.md §2](v15-on-ubuntu-2404.md#2-correction-socketio-fails-loudly-on-bench-5310)**
 
 ### 2.2 MariaDB config
 
