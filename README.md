@@ -32,6 +32,18 @@ grep -rn "sudo supervisorctl status" .
 | Sort out **nginx / SSL / supervisor** | [operations/ssl-nginx-and-production.md](operations/ssl-nginx-and-production.md) |
 | **Secure** a deployment, or check one for compromise | [operations/security.md](operations/security.md) |
 | Debug a site that **"loads forever" / users say they're "banned"** — 504s, `WORKER TIMEOUT`, retry storms | [operations/worker-timeout-death-spiral.md](operations/worker-timeout-death-spiral.md) |
+| Run **v15 on Ubuntu 24.04** (not 22.04) | [v15/v15-on-ubuntu-2404.md](v15/v15-on-ubuntu-2404.md) |
+| Publish a bench with **no public IP / no port forwarding** (Cloudflare Tunnel) | [operations/cloudflare-tunnel.md](operations/cloudflare-tunnel.md) |
+| Build on **bare metal** — firmware, BIOS, disks, Intel AMT, out-of-band access | [operations/bare-metal-and-firmware.md](operations/bare-metal-and-firmware.md) |
+
+### Build logs
+
+Complete chronological records of real builds, every error verbatim. Useful when you want
+the *order* things happened in, not just the isolated lesson.
+
+| Build | What it covers |
+|---|---|
+| [2026-09-01 — four v15 sites on bare metal via Cloudflare Tunnel](builds/2026-09-01-bare-metal-four-site-cloudflare-tunnel.md) | 14 failures end to end: firmware/AMT, USB imaging, `uv`, `log_format`, socketio `BACKOFF`, `HOME_MODE 0750`, cached 404s |
 
 ---
 
@@ -66,7 +78,7 @@ for the life of the server. Pick the OS to match the framework, not the other wa
 
 ---
 
-## The ten that bite hardest
+## The ones that bite hardest
 
 If you read nothing else before a deploy:
 
@@ -110,6 +122,20 @@ If you read nothing else before a deploy:
    (zero access-log hits = dead bookmark/DNS/ISP, not a block) → app auth (2FA typo
    noise is not a lockout) → capacity (504 tallies, `WORKER TIMEOUT`, load). Never fix
    a rung you haven't proven guilty. Same file §1.
+11. **On Ubuntu 24.04, `/home/frappe` is created `0750` and nginx cannot read it.** 24.04
+   changed `adduser`'s `HOME_MODE` from `0755`; nginx runs as `www-data` and cannot
+   traverse the directory, so **every `/assets` and `/files` request 404s** with
+   `stat() failed (13: Permission denied)`. The symptom misleads badly: pages still
+   return 200 because HTML comes from gunicorn via `proxy_pass`, so only styling and
+   attachments break and it looks like a CDN or asset-build fault. `chmod o+rx
+   /home/frappe`. See [v15/v15-on-ubuntu-2404.md](v15/v15-on-ubuntu-2404.md) §1.
+12. **Never give a CDN cache rule a blanket "Edge TTL: override origin".** It applies to
+   error responses too, so a transient origin fault is cached as a 404 for the full TTL —
+   a five-minute permissions bug became a **month-long** cached 404 that looked exactly
+   like the original problem. Scope the TTL by status code (200–299 long, 3xx–5xx zero).
+   And when a static file 404s, **compare origin and edge separately** before touching
+   anything — it distinguishes an app fault from a cache fault in one step. See
+   [operations/cloudflare-tunnel.md](operations/cloudflare-tunnel.md) §6, §10.
 
 ---
 
